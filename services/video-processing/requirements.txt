@@ -1,5 +1,6 @@
 # Video Processing Dependencies
 # Install with: pip install -r requirements.txt
+# Updated: force rebuild
 
 # Core
 fastapi==0.109.0
