@@ -8,6 +8,7 @@ import {
   RecordPropsType,
   Rectangle2d,
   resizeBox,
+  createShapeId,
 } from 'tldraw'
 
 // Define the shape properties schema
@@ -79,13 +80,13 @@ export class GoalNodeShapeUtil extends ShapeUtil<any> {
     const isSelected = this.editor.getSelectedShapeIds().includes(shape.id)
     const isEditing = this.editor.getEditingShapeId() === shape.id
 
-    const colorMap: Record<string, { bg: string; border: string; accent: string }> = {
-      blue: { bg: 'bg-blue-950/80', border: 'border-blue-500', accent: 'bg-blue-500' },
-      green: { bg: 'bg-green-950/80', border: 'border-green-500', accent: 'bg-green-500' },
-      purple: { bg: 'bg-purple-950/80', border: 'border-purple-500', accent: 'bg-purple-500' },
-      orange: { bg: 'bg-orange-950/80', border: 'border-orange-500', accent: 'bg-orange-500' },
-      red: { bg: 'bg-red-950/80', border: 'border-red-500', accent: 'bg-red-500' },
-      yellow: { bg: 'bg-yellow-950/80', border: 'border-yellow-500', accent: 'bg-yellow-500' },
+    const colorMap: Record<string, { border: string; accent: string; ring: string }> = {
+      blue: { border: 'border-blue-500/60', accent: 'bg-blue-500', ring: 'ring-blue-500/20' },
+      green: { border: 'border-green-500/60', accent: 'bg-green-500', ring: 'ring-green-500/20' },
+      purple: { border: 'border-purple-500/60', accent: 'bg-purple-500', ring: 'ring-purple-500/20' },
+      orange: { border: 'border-orange-500/60', accent: 'bg-orange-500', ring: 'ring-orange-500/20' },
+      red: { border: 'border-red-500/60', accent: 'bg-red-500', ring: 'ring-red-500/20' },
+      yellow: { border: 'border-yellow-500/60', accent: 'bg-yellow-500', ring: 'ring-yellow-500/20' },
     }
 
     const colors = colorMap[color] || colorMap.blue
@@ -130,6 +131,55 @@ export class GoalNodeShapeUtil extends ShapeUtil<any> {
 
     const daysRemaining = getDaysRemaining(targetDate)
 
+    const addTask = (e: React.MouseEvent) => {
+      e.stopPropagation()
+
+      const taskId = createShapeId()
+      const connectionId = createShapeId()
+
+      // Place task to the right of the goal node
+      const taskX = shape.x + shape.props.w + 60
+      const taskY = shape.y + (shape.props.h / 2) - 40
+
+      this.editor.createShapes([
+        {
+          id: taskId,
+          type: 'task-node',
+          x: taskX,
+          y: taskY,
+          props: {
+            w: 160,
+            h: 80,
+            title: 'New Task',
+            description: '',
+            completed: false,
+            dueDate: '',
+            priority: 'medium',
+            color,
+          },
+        },
+        {
+          id: connectionId,
+          type: 'connection',
+          x: 0,
+          y: 0,
+          props: {
+            fromId: shape.id,
+            toId: taskId,
+            fromAnchor: 'right',
+            toAnchor: 'left',
+            color,
+            style: 'solid',
+            label: '',
+          },
+        },
+      ])
+
+      // Select the new task and start editing
+      this.editor.select(taskId)
+      this.editor.setEditingShape(taskId)
+    }
+
     return (
       <HTMLContainer
         id={shape.id}
@@ -139,11 +189,28 @@ export class GoalNodeShapeUtil extends ShapeUtil<any> {
         }}
       >
         <div
-          className={`flex h-full w-full flex-col rounded-xl border-2 ${colors.bg} p-4 backdrop-blur-sm transition-all ${
-            isSelected ? `${colors.border} ring-2 ring-offset-0` : 'border-zinc-700'
+          className={`glass-panel-frost ios-scale-in relative flex h-full w-full flex-col rounded-xl p-4 transition-all ${
+            isSelected ? `${colors.border} ring-2 ${colors.ring} ring-offset-0` : colors.border
           }`}
-          style={{ pointerEvents: 'all' }}
+          style={{
+            fontFamily: 'var(--font-outfit)',
+            pointerEvents: 'all',
+          }}
         >
+          {/* Add Task button on the right side */}
+          {isSelected && (
+            <button
+              onClick={addTask}
+              onPointerDown={(e) => e.stopPropagation()}
+              className={`absolute -right-4 top-1/2 flex h-8 w-8 -translate-y-1/2 translate-x-full items-center justify-center rounded-full border ${colors.border} text-white transition-all hover:scale-110 backdrop-blur-xl`}
+              style={{ background: 'rgba(20, 20, 22, 0.7)' }}
+              title="Add Task"
+            >
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          )}
           {/* Header */}
           <div className="mb-3 flex items-start justify-between">
             <div className="flex-1">
@@ -262,7 +329,7 @@ export class GoalNodeShapeUtil extends ShapeUtil<any> {
             </div>
             <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
               <div
-                className={`h-full rounded-full ${colors.accent} transition-all duration-300`}
+                className={`h-full rounded-full ${colors.accent} transition-all duration-500 [transition-timing-function:var(--ease-spring)]`}
                 style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
               />
             </div>

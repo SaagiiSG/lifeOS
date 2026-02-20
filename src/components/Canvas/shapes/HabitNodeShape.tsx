@@ -34,8 +34,8 @@ export class HabitNodeShapeUtil extends ShapeUtil<any> {
 
   getDefaultProps(): HabitNodeShapeProps {
     return {
-      w: 300,
-      h: 160,
+      w: 340,
+      h: 140,
       name: 'New Habit',
       color: 'green',
       checkIns: [],
@@ -55,23 +55,46 @@ export class HabitNodeShapeUtil extends ShapeUtil<any> {
     const isSelected = this.editor.getSelectedShapeIds().includes(shape.id)
     const isEditing = this.editor.getEditingShapeId() === shape.id
 
-    const colorMap: Record<string, { bg: string; accent: string; check: string }> = {
-      green: { bg: 'bg-green-950/80', accent: 'bg-green-500', check: 'bg-green-500' },
-      blue: { bg: 'bg-blue-950/80', accent: 'bg-blue-500', check: 'bg-blue-500' },
-      purple: { bg: 'bg-purple-950/80', accent: 'bg-purple-500', check: 'bg-purple-500' },
-      orange: { bg: 'bg-orange-950/80', accent: 'bg-orange-500', check: 'bg-orange-500' },
-      red: { bg: 'bg-red-950/80', accent: 'bg-red-500', check: 'bg-red-500' },
-      yellow: { bg: 'bg-yellow-950/80', accent: 'bg-yellow-500', check: 'bg-yellow-500' },
+    const colorMap: Record<string, { border: string; accent: string; check: string; ring: string }> = {
+      green: { border: 'border-green-500/60', accent: 'bg-green-500', check: 'bg-green-500', ring: 'ring-green-500/20' },
+      blue: { border: 'border-blue-500/60', accent: 'bg-blue-500', check: 'bg-blue-500', ring: 'ring-blue-500/20' },
+      purple: { border: 'border-purple-500/60', accent: 'bg-purple-500', check: 'bg-purple-500', ring: 'ring-purple-500/20' },
+      orange: { border: 'border-orange-500/60', accent: 'bg-orange-500', check: 'bg-orange-500', ring: 'ring-orange-500/20' },
+      red: { border: 'border-red-500/60', accent: 'bg-red-500', check: 'bg-red-500', ring: 'ring-red-500/20' },
+      yellow: { border: 'border-yellow-500/60', accent: 'bg-yellow-500', check: 'bg-yellow-500', ring: 'ring-yellow-500/20' },
     }
 
     const colors = colorMap[color] || colorMap.green
 
-    // Get last 7 days
+    // Calculate how many days fit based on width (columns) and height (rows)
+    const padding = 32
+    const headerHeight = 40
+    const statsHeight = 24
+    const cellSize = 40 // fixed square cells
+    const gapSize = 4
+    const availableWidth = shape.props.w - padding
+    const availableHeight = shape.props.h - padding - headerHeight - statsHeight
+
+    const cols = Math.max(1, Math.floor((availableWidth + gapSize) / (cellSize + gapSize)))
+    const rows = Math.max(1, Math.floor((availableHeight + gapSize) / (cellSize + gapSize)))
+    const numDays = Math.min(365, Math.max(7, cols * rows))
+
+    // Helper to format date in local time (avoids UTC timezone shift)
+    const formatLocalDate = (d: Date) => {
+      const y = d.getFullYear()
+      const m = String(d.getMonth() + 1).padStart(2, '0')
+      const day = String(d.getDate()).padStart(2, '0')
+      return `${y}-${m}-${day}`
+    }
+
+    // Get past N days + 5 upcoming days
     const today = new Date()
-    const days = Array.from({ length: 7 }, (_, i) => {
+    const upcomingDays = 5
+    const pastDays = Math.max(1, numDays - upcomingDays)
+    const days = Array.from({ length: pastDays + upcomingDays }, (_, i) => {
       const date = new Date(today)
-      date.setDate(date.getDate() - (6 - i))
-      return date.toISOString().split('T')[0]
+      date.setDate(date.getDate() - (pastDays - 1 - i))
+      return formatLocalDate(date)
     })
 
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -84,12 +107,12 @@ export class HabitNodeShapeUtil extends ShapeUtil<any> {
     let currentStreak = 0
     let longestStreak = 0
     let tempStreak = 0
-    const todayStr = today.toISOString().split('T')[0]
+    const todayStr = formatLocalDate(today)
 
     // Calculate current streak
     const checkDate = new Date(today)
     while (true) {
-      const dateStr = checkDate.toISOString().split('T')[0]
+      const dateStr = formatLocalDate(checkDate)
       const hasCheckIn = checkIns.some((c) => c.date === dateStr && c.completed)
       if (hasCheckIn) {
         currentStreak++
@@ -160,10 +183,13 @@ export class HabitNodeShapeUtil extends ShapeUtil<any> {
         }}
       >
         <div
-          className={`flex h-full w-full flex-col rounded-xl border-2 ${colors.bg} p-4 backdrop-blur-sm transition-all ${
-            isSelected ? 'border-green-500 ring-2 ring-green-500/30' : 'border-zinc-700'
+          className={`glass-panel-frost ios-scale-in flex h-full w-full flex-col rounded-xl p-4 transition-all ${
+            isSelected ? `${colors.border} ring-2 ${colors.ring} ring-offset-0` : colors.border
           }`}
-          style={{ pointerEvents: 'all' }}
+          style={{
+            pointerEvents: 'all',
+            fontFamily: 'var(--font-outfit)',
+          }}
         >
           {/* Header */}
           <div className="mb-3 flex items-center justify-between">
@@ -209,34 +235,44 @@ export class HabitNodeShapeUtil extends ShapeUtil<any> {
             )}
           </div>
 
-          {/* 7-Day Grid */}
-          <div className="mb-3 grid grid-cols-7 gap-1">
-            {days.map((date, i) => {
-              const dayDate = new Date(date)
+          {/* Dynamic Day Grid */}
+          <div
+            className="mb-3 flex flex-wrap gap-1"
+            style={{ justifyContent: 'flex-start' }}
+          >
+            {days.map((date) => {
+              const dayDate = new Date(date + 'T00:00:00')
               const isChecked = checkIns.some((c) => c.date === date && c.completed)
               const isToday = date === todayStr
+              const isFuture = date > todayStr
 
               return (
                 <button
                   key={date}
                   onClick={() => toggleDay(date)}
                   onPointerDown={(e) => e.stopPropagation()}
-                  className={`flex flex-col items-center rounded-lg p-1.5 transition-all ${
+                  className={`flex h-10 w-10 flex-col items-center justify-center rounded-lg transition-all ${
                     isToday ? 'ring-2 ring-white/30' : ''
-                  } ${isChecked ? colors.check + ' text-white' : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'}`}
+                  } ${
+                    isChecked
+                      ? colors.check + ' text-white'
+                      : isFuture
+                        ? 'bg-zinc-800/50 text-zinc-600 border border-dashed border-zinc-700 hover:bg-zinc-800 hover:text-zinc-400'
+                        : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+                  }`}
                 >
-                  <span className="text-[10px] font-medium">
+                  <span className="text-[9px] font-medium leading-none">
                     {dayNames[dayDate.getDay()]}
                   </span>
-                  <span className="text-xs">{dayDate.getDate()}</span>
-                  {isChecked && <span className="text-sm">✓</span>}
+                  <span className="text-[11px] leading-none">{dayDate.getDate()}</span>
+                  {isChecked && <span className="text-xs leading-none">✓</span>}
                 </button>
               )
             })}
           </div>
 
           {/* Stats */}
-          <div className="flex items-center justify-between text-xs text-zinc-400">
+          <div className="mt-auto flex items-center justify-between text-xs text-zinc-400">
             <div className="flex gap-3">
               <span>
                 Rate: <span className="text-white">{completionRate}%</span>
@@ -245,7 +281,7 @@ export class HabitNodeShapeUtil extends ShapeUtil<any> {
                 Best: <span className="text-white">{longestStreak}d</span>
               </span>
             </div>
-            <span className="text-zinc-500">Last 30 days</span>
+            <span className="text-zinc-500">{pastDays}d + {upcomingDays} upcoming</span>
           </div>
         </div>
       </HTMLContainer>

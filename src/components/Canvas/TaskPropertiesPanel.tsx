@@ -2,7 +2,7 @@
 
 import { useEditor, useValue } from 'tldraw'
 import { Input } from '@/components/ui/input'
-import { CheckSquare, Calendar, Flag } from 'lucide-react'
+import { CheckSquare, Calendar, Flag, Lock, Check, Link2 } from 'lucide-react'
 import type { TaskNodeShape } from './shapes/TaskNodeShape'
 
 const colors = [
@@ -35,9 +35,39 @@ export function TaskPropertiesPanel() {
     [editor]
   )
 
+  const selectedShapeId = selectedShape?.id ?? null
+
+  // Compute dependencies for this task
+  const dependencies = useValue(
+    'task dependencies',
+    () => {
+      if (!selectedShapeId) return []
+      const allShapes = editor.getCurrentPageShapes()
+      const connections = allShapes.filter((s) => (s as any).type === 'connection')
+      const deps: { id: string; completed: boolean; title: string }[] = []
+
+      for (const conn of connections) {
+        const connProps = (conn as any).props
+        if (connProps.toId === selectedShapeId) {
+          const sourceShape = editor.getShape(connProps.fromId)
+          if (sourceShape && (sourceShape as any).type === 'task-node') {
+            deps.push({
+              id: sourceShape.id,
+              completed: (sourceShape as any).props.completed,
+              title: (sourceShape as any).props.title,
+            })
+          }
+        }
+      }
+      return deps
+    },
+    [editor, selectedShapeId]
+  )
+
   if (!selectedShape) return null
 
   const { color, priority, dueDate, completed } = selectedShape.props
+  const isLocked = dependencies.some((d) => !d.completed)
 
   const updateTask = (updates: Partial<TaskNodeShape['props']>) => {
     editor.updateShape({
@@ -49,7 +79,7 @@ export function TaskPropertiesPanel() {
   }
 
   return (
-    <div className="absolute right-4 top-4 z-50 w-64 rounded-lg border border-zinc-700 bg-zinc-900/95 backdrop-blur-sm">
+    <div className="w-full">
       <div className="flex items-center gap-2 border-b border-zinc-700 p-3">
         <CheckSquare className="h-4 w-4 text-blue-400" />
         <span className="text-sm font-medium text-white">Task Settings</span>
@@ -62,16 +92,65 @@ export function TaskPropertiesPanel() {
             Status
           </label>
           <button
-            onClick={() => updateTask({ completed: !completed })}
-            className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-              completed
-                ? 'bg-green-500/20 text-green-400'
-                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-            }`}
+            onClick={() => !isLocked && updateTask({ completed: !completed })}
+            disabled={isLocked}
+            className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${isLocked
+                ? 'cursor-not-allowed bg-zinc-800/50 text-zinc-500'
+                : completed
+                  ? 'bg-green-500/20 text-green-400'
+                  : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+              }`}
           >
-            {completed ? '✓ Completed' : 'Mark Complete'}
+            {isLocked ? (
+              <>
+                <Lock className="h-3.5 w-3.5" />
+                Blocked
+              </>
+            ) : completed ? (
+              <>
+                <Check className="h-3.5 w-3.5" />
+                Completed
+              </>
+            ) : (
+              'Mark Complete'
+            )}
           </button>
         </div>
+
+        {/* Dependencies */}
+        {dependencies.length > 0 && (
+          <div className="mb-4">
+            <label className="mb-2 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-zinc-400">
+              <Link2 className="h-3 w-3" />
+              Dependencies ({dependencies.filter(d => d.completed).length}/{dependencies.length})
+            </label>
+            <div className="flex flex-col gap-1">
+              {dependencies.map((dep) => (
+                <button
+                  key={dep.id}
+                  onClick={() => {
+                    editor.select(dep.id as any)
+                    editor.zoomToSelection({ animation: { duration: 300 } })
+                  }}
+                  className="flex items-center gap-2 rounded-lg bg-zinc-800/50 px-3 py-2 text-left text-xs transition-colors hover:bg-zinc-700/50"
+                >
+                  <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${dep.completed
+                      ? 'border-green-500 bg-green-500'
+                      : 'border-zinc-600'
+                    }`}
+                  >
+                    {dep.completed && (
+                      <Check className="h-2.5 w-2.5 text-white" />
+                    )}
+                  </div>
+                  <span className={dep.completed ? 'text-zinc-500 line-through' : 'text-zinc-300'}>
+                    {dep.title}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Color */}
         <div className="mb-4">
@@ -82,9 +161,8 @@ export function TaskPropertiesPanel() {
             {colors.map((c) => (
               <button
                 key={c.name}
-                className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${
-                  color === c.name ? 'border-white' : 'border-transparent'
-                }`}
+                className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${color === c.name ? 'border-white' : 'border-transparent'
+                  }`}
                 style={{ backgroundColor: c.hex }}
                 onClick={() => updateTask({ color: c.name })}
               />
@@ -103,11 +181,10 @@ export function TaskPropertiesPanel() {
               <button
                 key={p.name}
                 onClick={() => updateTask({ priority: p.name })}
-                className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                  priority === p.name
+                className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${priority === p.name
                     ? `${p.color} text-white`
                     : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                }`}
+                  }`}
               >
                 {p.label}
               </button>

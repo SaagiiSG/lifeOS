@@ -12,7 +12,10 @@ import {
   RefreshCw,
   ExternalLink,
   Film,
+  Subtitles,
 } from 'lucide-react'
+import { VideoPlayerWithCaptions } from './VideoPlayerWithCaptions'
+import { VideoEditorModal } from './VideoEditorModal'
 import type { VideoNodeShape } from './shapes/VideoNodeShape'
 import {
   uploadVideoSimple,
@@ -35,6 +38,7 @@ export function VideoPropertiesPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [showPlayer, setShowPlayer] = useState(false)
+  const [showEditor, setShowEditor] = useState(false)
 
   const selectedShape = useValue(
     'selected video node',
@@ -52,7 +56,16 @@ export function VideoPropertiesPanel() {
 
   if (!selectedShape) return null
 
-  const { status, sourceUrl, outputUrl, duration, fileSize, title } = selectedShape.props
+  const {
+    status,
+    sourceUrl,
+    outputUrl,
+    duration,
+    fileSize,
+    title,
+    englishCaptionsUrl,
+    mongolianCaptionsUrl,
+  } = selectedShape.props
 
   const updateVideo = (updates: Partial<VideoNodeShape['props']>) => {
     editor.updateShape({
@@ -218,19 +231,32 @@ export function VideoPropertiesPanel() {
         // Get final result
         const finalJob = await pollProcessingStatus(job_id)
 
-        if (finalJob.status === 'completed' && finalJob.result?.output_url) {
+        if (finalJob.status === 'completed') {
+          // Use output_url if available, otherwise keep the source URL
+          const processedUrl = finalJob.result?.output_url || sourceUrl
+
+          // Get caption URLs from the result
+          const captionUrls = finalJob.result?.captions?.urls || {}
+
           updateVideo({
             status: 'completed',
             processingProgress: 100,
-            outputUrl: finalJob.result.output_url,
+            outputUrl: processedUrl,
+            englishCaptionsUrl: captionUrls.english_srt || '',
+            mongolianCaptionsUrl: captionUrls.mongolian_srt || '',
+            transcriptUrl: captionUrls.transcript_json || '',
           })
 
           if (isSupabaseConfigured()) {
             await updateVideoProjectStatus(selectedShape.id, 'completed', {
-              output_url: finalJob.result.output_url,
+              output_url: processedUrl,
+              metadata: {
+                silence_removal: finalJob.result?.silence_removal,
+                captions: finalJob.result?.captions,
+              },
             })
           }
-        } else {
+        } else if (finalJob.status === 'failed') {
           throw new Error(finalJob.message || 'Processing failed')
         }
       } catch (error) {
@@ -283,14 +309,14 @@ export function VideoPropertiesPanel() {
   }
 
   return (
-    <div className="absolute right-4 top-4 z-50 w-72 rounded-lg border border-zinc-700 bg-zinc-900/95 backdrop-blur-sm">
+    <div className="w-full">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-zinc-700 p-3">
         <Film className="h-4 w-4 text-purple-400" />
         <span className="text-sm font-medium text-white">Video Project</span>
       </div>
 
-      <div className="max-h-[70vh] overflow-y-auto p-3">
+      <div className="p-3">
         {/* Upload Button */}
         {status === 'empty' && (
           <div className="mb-4">
@@ -323,14 +349,23 @@ export function VideoPropertiesPanel() {
             {/* Thumbnail/Preview */}
             {(selectedShape.props.thumbnailUrl || sourceUrl) && (
               <div className="mb-4">
-                <div className="relative aspect-video overflow-hidden rounded-lg bg-black">
-                  {showPlayer && sourceUrl ? (
-                    <video
-                      src={sourceUrl}
-                      controls
-                      autoPlay
-                      className="h-full w-full"
-                    />
+                <div className="relative overflow-hidden rounded-lg bg-black" style={{ aspectRatio: status === 'completed' ? '9/16' : '16/9' }}>
+                  {showPlayer && (outputUrl || sourceUrl) ? (
+                    status === 'completed' && (englishCaptionsUrl || mongolianCaptionsUrl) ? (
+                      <VideoPlayerWithCaptions
+                        videoUrl={outputUrl || sourceUrl}
+                        englishCaptionsUrl={englishCaptionsUrl}
+                        mongolianCaptionsUrl={mongolianCaptionsUrl}
+                        onClose={() => setShowPlayer(false)}
+                      />
+                    ) : (
+                      <video
+                        src={outputUrl || sourceUrl}
+                        controls
+                        autoPlay
+                        className="h-full w-full"
+                      />
+                    )
                   ) : (
                     <>
                       {selectedShape.props.thumbnailUrl ? (
@@ -377,15 +412,14 @@ export function VideoPropertiesPanel() {
               <div className="flex items-center justify-between text-sm">
                 <span className="text-zinc-400">Status</span>
                 <span
-                  className={`font-medium ${
-                    status === 'completed'
+                  className={`font-medium ${status === 'completed'
                       ? 'text-green-400'
                       : status === 'failed'
                         ? 'text-red-400'
                         : status === 'processing'
                           ? 'text-purple-400'
                           : 'text-yellow-400'
-                  }`}
+                    }`}
                 >
                   {status.charAt(0).toUpperCase() + status.slice(1)}
                 </span>
@@ -400,6 +434,19 @@ export function VideoPropertiesPanel() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-zinc-400">Size</span>
                   <span className="text-white">{formatFileSize(fileSize)}</span>
+                </div>
+              )}
+              {(englishCaptionsUrl || mongolianCaptionsUrl) && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-zinc-400">Captions</span>
+                  <div className="flex gap-1">
+                    {englishCaptionsUrl && (
+                      <span className="rounded bg-white/20 px-1.5 py-0.5 text-xs text-white">EN</span>
+                    )}
+                    {mongolianCaptionsUrl && (
+                      <span className="rounded bg-yellow-500/20 px-1.5 py-0.5 text-xs text-yellow-400">MN</span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -417,13 +464,22 @@ export function VideoPropertiesPanel() {
               )}
 
               {status === 'completed' && outputUrl && (
-                <Button
-                  className="w-full"
-                  onClick={() => window.open(outputUrl, '_blank')}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Download
-                </Button>
+                <>
+                  <Button
+                    className="w-full bg-purple-600 hover:bg-purple-700"
+                    onClick={() => setShowEditor(true)}
+                  >
+                    <Subtitles className="mr-2 h-4 w-4" />
+                    Edit Video
+                  </Button>
+                  <Button
+                    className="w-full"
+                    onClick={() => window.open(outputUrl, '_blank')}
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Download
+                  </Button>
+                </>
               )}
 
               {sourceUrl && (
@@ -471,6 +527,16 @@ export function VideoPropertiesPanel() {
           </>
         )}
       </div>
+
+      {/* Video Editor Modal */}
+      <VideoEditorModal
+        isOpen={showEditor}
+        onClose={() => setShowEditor(false)}
+        videoUrl={outputUrl || sourceUrl}
+        englishCaptionsUrl={englishCaptionsUrl}
+        mongolianCaptionsUrl={mongolianCaptionsUrl}
+        transcriptUrl={selectedShape.props.transcriptUrl}
+      />
     </div>
   )
 }

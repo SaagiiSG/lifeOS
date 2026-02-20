@@ -24,6 +24,10 @@ const videoNodeShapeProps = {
   uploadProgress: T.number,
   processingProgress: T.number,
   error: T.string,
+  // Caption URLs
+  englishCaptionsUrl: T.string,
+  mongolianCaptionsUrl: T.string,
+  transcriptUrl: T.string,
 }
 
 type VideoNodeShapeProps = RecordPropsType<typeof videoNodeShapeProps>
@@ -49,6 +53,9 @@ export class VideoNodeShapeUtil extends ShapeUtil<any> {
       uploadProgress: 0,
       processingProgress: 0,
       error: '',
+      englishCaptionsUrl: '',
+      mongolianCaptionsUrl: '',
+      transcriptUrl: '',
     }
   }
 
@@ -108,10 +115,13 @@ export class VideoNodeShapeUtil extends ShapeUtil<any> {
         }}
       >
         <div
-          className={`flex h-full w-full flex-col overflow-hidden rounded-xl border-2 bg-zinc-900/95 backdrop-blur-sm transition-all ${
-            isSelected ? 'border-purple-500 ring-2 ring-purple-500/30' : 'border-zinc-700'
+          className={`glass-panel-frost ios-scale-in flex h-full w-full flex-col overflow-hidden rounded-xl transition-all ${
+            isSelected ? 'border-purple-500/60 ring-2 ring-purple-500/20 ring-offset-0' : 'border-purple-500/60'
           }`}
-          style={{ pointerEvents: isEditing ? 'all' : 'none' }}
+          style={{
+            pointerEvents: isEditing ? 'all' : 'none',
+            fontFamily: 'var(--font-outfit)',
+          }}
         >
           {/* Video Preview Area */}
           <div className="relative flex-1 bg-black">
@@ -214,7 +224,7 @@ export class VideoNodeShapeUtil extends ShapeUtil<any> {
           </div>
 
           {/* Info Bar */}
-          <div className="border-t border-zinc-700 bg-zinc-800/50 p-3">
+          <div className="border-t border-white/[0.06] bg-white/[0.02] p-3">
             <div className="mb-2 flex items-start justify-between">
               {isEditing ? (
                 <input

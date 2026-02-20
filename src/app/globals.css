@@ -6,7 +6,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-outfit);
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -48,6 +48,19 @@
 
 :root {
   --radius: 0.625rem;
+
+  /* Apple-style easing curves */
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  --ease-spring-heavy: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out-quint: cubic-bezier(0.83, 0, 0.17, 1);
+
+  /* Animation durations */
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+  --duration-enter: 350ms;
+  --duration-exit: 200ms;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -126,4 +139,158 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-zinc-900/60 backdrop-blur-2xl border border-white/10 shadow-2xl;
+    background-image: linear-gradient(to bottom right, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01));
+    box-shadow:
+      0 4px 6px -1px rgba(0, 0, 0, 0.1),
+      0 2px 4px -1px rgba(0, 0, 0, 0.06),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .glass-panel-frost {
+    @apply backdrop-blur-3xl border border-white/[0.06] shadow-2xl;
+    background: rgba(20, 20, 22, 0.55);
+    background-image: linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.04) 0%,
+      rgba(255, 255, 255, 0.01) 50%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      0 2px 8px rgba(0, 0, 0, 0.15),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.04),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.03);
+  }
+
+  /* iOS-style animation utilities */
+  .ios-animate-in {
+    animation: ios-fade-in var(--duration-enter) var(--ease-spring) both;
+  }
+
+  .ios-animate-out {
+    animation: ios-fade-out var(--duration-exit) var(--ease-out-expo) both;
+  }
+
+  .ios-slide-in-right {
+    animation: ios-slide-right-in var(--duration-enter) var(--ease-spring) both;
+  }
+
+  .ios-slide-out-right {
+    animation: ios-slide-right-out var(--duration-exit) var(--ease-out-expo) both;
+  }
+
+  .ios-slide-in-up {
+    animation: ios-slide-up var(--duration-enter) var(--ease-spring) both;
+    opacity: 0;
+  }
+
+  .ios-scale-in {
+    animation: ios-scale-in var(--duration-enter) var(--ease-spring) both;
+  }
+
+  .ios-btn-press {
+    transition: transform var(--duration-fast) var(--ease-spring);
+  }
+  .ios-btn-press:active {
+    transform: scale(0.97);
+  }
+
+  .ios-hover-glow {
+    transition:
+      box-shadow var(--duration-normal) var(--ease-out-expo),
+      border-color var(--duration-normal) var(--ease-out-expo),
+      transform var(--duration-normal) var(--ease-spring);
+  }
+  .ios-hover-glow:hover {
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.3),
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  /* Staggered children entrance */
+  .stagger-children > * {
+    animation: stagger-fade-in var(--duration-enter) var(--ease-spring) both;
+    opacity: 0;
+  }
+  .stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+  .stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+  .stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+  .stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+  .stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+  .stagger-children > *:nth-child(7) { animation-delay: 300ms; }
+  .stagger-children > *:nth-child(8) { animation-delay: 350ms; }
+  .stagger-children > *:nth-child(9) { animation-delay: 400ms; }
+  .stagger-children > *:nth-child(10) { animation-delay: 450ms; }
+}
+
+/* iOS-style keyframes */
+@keyframes ios-fade-in {
+  from { opacity: 0; transform: scale(0.97) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes ios-fade-out {
+  from { opacity: 1; transform: scale(1) translateY(0); }
+  to { opacity: 0; transform: scale(0.97) translateY(4px); }
+}
+
+@keyframes ios-slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes ios-slide-right-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes ios-slide-right-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(20px); }
+}
+
+@keyframes ios-scale-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ios-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+@keyframes check-pop {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); }
+}
+
+@keyframes stagger-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 12px 2px var(--glow-color, rgba(100, 150, 255, 0.15)); }
+}
+
+/* Connection animations */
+@keyframes connection-pulse {
+  0%, 100% { opacity: 0.08; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes connection-pulse-vine {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.6; }
 }

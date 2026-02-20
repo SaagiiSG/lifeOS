@@ -15,11 +15,12 @@ export interface ProcessingOptions {
 
 export interface ProcessingJob {
   job_id: string
-  status: 'pending' | 'downloading' | 'removing_silence' | 'generating_captions' | 'uploading' | 'completed' | 'failed'
+  status: 'pending' | 'downloading' | 'removing_silence' | 'generating_captions' | 'compositing' | 'encoding' | 'uploading' | 'completed' | 'failed'
   progress: number
   message: string
   result?: {
     output_url?: string
+    output_file?: string
     silence_removal?: {
       silence_removed: number
       original_duration: number
@@ -30,7 +31,44 @@ export interface ProcessingJob {
       success: boolean
       language: string
       segment_count: number
+      urls?: {
+        english_srt?: string
+        mongolian_srt?: string
+        transcript_json?: string
+      }
     }
+    export?: {
+      success: boolean
+      duration: number
+      resolution: string
+      file_size: number
+      file_size_mb: number
+      segments_count: number
+      broll_count: number
+      captions_burned: boolean
+    }
+  }
+}
+
+export interface ExportData {
+  videoUrl: string
+  shapeId: string
+  brollOverlays: { start: number; end: number; clip_file_path: string }[]
+  englishCaptions: { start: number; end: number; text: string }[]
+  mongolianCaptions: { start: number; end: number; text: string }[]
+  captionSettings: {
+    english_y: number
+    mongolian_y: number
+    show_shadow: boolean
+    burn_captions: boolean
+  }
+  exportSettings: {
+    resolution: 'source' | '1080' | '4k'
+  }
+  bgMusicPath?: string
+  volumeSettings?: {
+    main_volume: number
+    bg_music_volume: number
   }
 }
 
@@ -101,6 +139,37 @@ export async function pollProcessingStatus(
   }
 
   throw new Error('Processing timed out')
+}
+
+/**
+ * Start video export with B-roll and captions
+ */
+export async function startVideoExport(
+  data: ExportData
+): Promise<{ job_id: string; status: string; message: string }> {
+  const response = await fetch(`${VIDEO_PROCESSOR_URL}/export`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      video_url: data.videoUrl,
+      shape_id: data.shapeId,
+      broll_overlays: data.brollOverlays,
+      english_captions: data.englishCaptions,
+      mongolian_captions: data.mongolianCaptions,
+      caption_settings: data.captionSettings,
+      export_settings: data.exportSettings,
+      bg_music_path: data.bgMusicPath,
+      volume_settings: data.volumeSettings,
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Failed to start export: ${response.statusText}`)
+  }
+
+  return response.json()
 }
 
 /**

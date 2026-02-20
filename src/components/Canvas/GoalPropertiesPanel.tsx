@@ -170,14 +170,14 @@ export function GoalPropertiesPanel() {
   }
 
   return (
-    <div className="absolute right-4 top-4 z-50 w-72 rounded-lg border border-zinc-700 bg-zinc-900/95 backdrop-blur-sm">
+    <div className="w-full">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-zinc-700 p-3">
         <Target className="h-4 w-4 text-blue-400" />
         <span className="text-sm font-medium text-white">Goal Settings</span>
       </div>
 
-      <div className="max-h-[70vh] overflow-y-auto p-3">
+      <div className="p-3">
         {/* Color Selection */}
         <div className="mb-4">
           <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-zinc-400">
@@ -187,9 +187,8 @@ export function GoalPropertiesPanel() {
             {colors.map((c) => (
               <button
                 key={c.name}
-                className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${
-                  color === c.name ? 'border-white' : 'border-transparent'
-                }`}
+                className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${color === c.name ? 'border-white' : 'border-transparent'
+                  }`}
                 style={{ backgroundColor: c.hex }}
                 onClick={() => handleColorChange(c.name)}
               />
@@ -206,11 +205,10 @@ export function GoalPropertiesPanel() {
             {['active', 'completed', 'archived'].map((s) => (
               <button
                 key={s}
-                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                  status === s
+                className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${status === s
                     ? 'bg-blue-500 text-white'
                     : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
-                }`}
+                  }`}
                 onClick={() => handleStatusChange(s)}
               >
                 {s}
@@ -367,18 +365,16 @@ export function GoalPropertiesPanel() {
               >
                 <button
                   onClick={() => toggleMilestone(m.id)}
-                  className={`flex h-5 w-5 items-center justify-center rounded border ${
-                    m.completed
+                  className={`flex h-5 w-5 items-center justify-center rounded border ${m.completed
                       ? 'border-green-500 bg-green-500 text-white'
                       : 'border-zinc-600 text-transparent hover:border-zinc-500'
-                  }`}
+                    }`}
                 >
                   <Check className="h-3 w-3" />
                 </button>
                 <span
-                  className={`flex-1 text-sm ${
-                    m.completed ? 'text-zinc-500 line-through' : 'text-white'
-                  }`}
+                  className={`flex-1 text-sm ${m.completed ? 'text-zinc-500 line-through' : 'text-white'
+                    }`}
                 >
                   {m.title}
                 </span>

@@ -31,10 +31,48 @@ export function useSupabase() {
     return () => subscription.unsubscribe()
   }, [])
 
+  const signOut = async () => {
+    await supabase.auth.signOut()
+  }
+
+  const signInWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+  }
+
+  const signInWithEmail = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+    return { error: error as Error | null }
+  }
+
+  const signUpWithEmail = async (email: string, password: string) => {
+    const { error, data } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+
+    const needsVerification = !error && data.user && !data.session
+    return { error: error as Error | null, needsVerification: !!needsVerification }
+  }
+
   return {
     supabase,
     user,
     loading,
     isConfigured,
+    signOut,
+    signInWithGoogle,
+    signInWithEmail,
+    signUpWithEmail,
   }
 }

@@ -51,6 +51,9 @@ CREATE TABLE IF NOT EXISTS goals (
   target_date DATE,
   progress INTEGER NOT NULL DEFAULT 0 CHECK (progress >= 0 AND progress <= 100),
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'archived')),
+  quarter TEXT, -- e.g., "Q1 2026"
+  rolled_over_from TEXT,
+  color TEXT,
   milestones JSONB DEFAULT '[]',
   check_ins JSONB DEFAULT '[]',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -114,9 +117,47 @@ CREATE TABLE IF NOT EXISTS video_projects (
   thumbnail_url TEXT,
   duration INTEGER,
   metadata JSONB DEFAULT '{}',
+  -- Caption fields
+  caption_english_url TEXT,
+  caption_mongolian_url TEXT,
+  transcript TEXT,
+  -- Video editing fields
+  edit_metadata JSONB DEFAULT '{}',
+  broll_overlay_metadata JSONB DEFAULT '{}',
+  export_settings JSONB DEFAULT '{}',
+  exported_video_url TEXT,
+  video_duration_original INTEGER,
+  video_duration_final INTEGER,
+  ssd_path TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- B-roll clips table: stores B-roll metadata
+CREATE TABLE IF NOT EXISTS broll_clips (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  file_path TEXT NOT NULL,
+  category TEXT DEFAULT 'random' CHECK (category IN ('timelapse', 'medium', 'wide-shot', 'close-up', 'random', 'walking-selfie')),
+  duration INTEGER,
+  thumbnail_url TEXT,
+  keywords TEXT[],
+  filename TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Enable RLS for broll_clips
+ALTER TABLE broll_clips ENABLE ROW LEVEL SECURITY;
+
+-- RLS policies for broll_clips
+CREATE POLICY "Users can manage their own broll clips"
+  ON broll_clips FOR ALL
+  USING (auth.uid() = user_id OR user_id IS NULL)
+  WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+
+-- Index for broll_clips
+CREATE INDEX IF NOT EXISTS idx_broll_clips_category ON broll_clips(category);
+CREATE INDEX IF NOT EXISTS idx_broll_clips_user_id ON broll_clips(user_id);
 
 -- Enable RLS for video_projects
 ALTER TABLE video_projects ENABLE ROW LEVEL SECURITY;

@@ -121,13 +121,13 @@ export function HabitPropertiesPanel() {
   }
 
   return (
-    <div className="absolute right-4 top-4 z-50 w-72 rounded-lg border border-zinc-700 bg-zinc-900/95 backdrop-blur-sm">
+    <div className="w-full">
       <div className="flex items-center gap-2 border-b border-zinc-700 p-3">
         <Flame className="h-4 w-4 text-orange-400" />
         <span className="text-sm font-medium text-white">Habit Tracker</span>
       </div>
 
-      <div className="max-h-[70vh] overflow-y-auto p-3">
+      <div className="p-3">
         {/* Color */}
         <div className="mb-4">
           <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-zinc-400">
@@ -137,9 +137,8 @@ export function HabitPropertiesPanel() {
             {colors.map((c) => (
               <button
                 key={c.name}
-                className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${
-                  color === c.name ? 'border-white' : 'border-transparent'
-                }`}
+                className={`h-6 w-6 rounded-full border-2 transition-transform hover:scale-110 ${color === c.name ? 'border-white' : 'border-transparent'
+                  }`}
                 style={{ backgroundColor: c.hex }}
                 onClick={() => updateHabit({ color: c.name })}
               />
@@ -177,9 +176,8 @@ export function HabitPropertiesPanel() {
             {stats.heatmapData.map((day, i) => (
               <div
                 key={i}
-                className={`h-6 w-full rounded ${
-                  day.completed ? 'bg-green-500' : 'bg-zinc-800'
-                }`}
+                className={`h-6 w-full rounded ${day.completed ? 'bg-green-500' : 'bg-zinc-800'
+                  }`}
                 title={day.date}
               />
             ))}

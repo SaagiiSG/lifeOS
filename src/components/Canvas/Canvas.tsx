@@ -6,14 +6,16 @@ import {
   Editor,
   loadSnapshot,
   getSnapshot,
-  TLShapeId,
   useEditor,
+  track,
+  createShapeId,
 } from 'tldraw'
 import 'tldraw/tldraw.css'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { TextNodeShapeUtil } from './shapes/TextNodeShape'
 import { GoalNodeShapeUtil } from './shapes/GoalNodeShape'
 import { VideoNodeShapeUtil } from './shapes/VideoNodeShape'
+import { VideoEditorNodeShapeUtil } from './shapes/VideoEditorNodeShape'
 import { HabitNodeShapeUtil } from './shapes/HabitNodeShape'
 import { TaskNodeShapeUtil } from './shapes/TaskNodeShape'
 import { ConnectionShapeUtil } from './shapes/ConnectionShape'
@@ -23,90 +25,84 @@ import { ContentIdeaNodeShapeUtil } from './shapes/ContentIdeaNodeShape'
 import { ChartNodeShapeUtil } from './shapes/ChartNodeShape'
 import { CalendarEventNodeShapeUtil } from './shapes/CalendarEventNodeShape'
 import { FollowerCountNodeShapeUtil } from './shapes/FollowerCountNodeShape'
-import { Toolbar } from './Toolbar'
-import { PropertiesPanel } from './PropertiesPanel'
-import { GoalPropertiesPanel } from './GoalPropertiesPanel'
-import { VideoPropertiesPanel } from './VideoPropertiesPanel'
-import { HabitPropertiesPanel } from './HabitPropertiesPanel'
-import { TaskPropertiesPanel } from './TaskPropertiesPanel'
-import { ConnectionPropertiesPanel } from './ConnectionPropertiesPanel'
-import { ConnectionMode } from './ConnectionMode'
+import { PhaseNodeShapeUtil } from './shapes/PhaseNodeShape'
+import { TextGroupNodeShapeUtil } from './shapes/TextGroupNodeShape'
+import { DailyPlannerNodeShapeUtil } from './shapes/DailyPlannerNodeShape'
+import { HabitDashboardNodeShapeUtil } from './shapes/HabitDashboardNodeShape'
+import { ContentCalendarNodeShapeUtil } from './shapes/ContentCalendarNodeShape'
+import { GoalEcosystemNodeShapeUtil } from './shapes/GoalEcosystemNodeShape'
+import { SelectionMenu } from './SelectionMenu'
+
+const DOT_SPACING = 24
+
+const DotGridBackground = track(function DotGridBackground() {
+  const editor = useEditor()
+  const camera = editor.getCamera()
+  const zoom = camera.z
+
+  const scaledSpacing = DOT_SPACING * zoom
+  const offsetX = (camera.x * zoom) % scaledSpacing
+  const offsetY = (camera.y * zoom) % scaledSpacing
+  const dotSize = Math.max(0.5, 1 * zoom)
+
+  useEffect(() => {
+    const container = editor.getContainer()
+    container.style.setProperty('--dot-size', `${dotSize}px`)
+    container.style.setProperty('--dot-spacing', `${scaledSpacing}px`)
+    container.style.setProperty('--dot-offset-x', `${offsetX}px`)
+    container.style.setProperty('--dot-offset-y', `${offsetY}px`)
+  })
+
+  return null
+})
+import { TopLeftToolbar } from './layout/TopLeftToolbar'
+import { BottomLeftSection } from './layout/BottomLeftSection'
+import { TopRightSection } from './layout/TopRightSection'
+import { NodeInfoDrawer } from './layout/NodeInfoDrawer'
+import { VideoEditorPropertiesPanel } from './VideoEditorPropertiesPanel'
 import { ConnectionHandles } from './ConnectionHandles'
 import { Minimap } from './Minimap'
 import { SearchPanel } from './SearchPanel'
-import { StatusBar } from './StatusBar'
-import { loadCanvas, saveCanvas, getStorageStatus } from '@/lib/canvas-storage'
-import { createShapeId } from 'tldraw'
+import { QuickLogPanel } from './layout/QuickLogPanel'
+import { PomodoroTimer } from './PomodoroTimer'
+import { loadCanvas, saveCanvas, getStorageStatus, canvasLoadSucceeded } from '@/lib/canvas-storage'
+import { useGoalSync } from '@/hooks/useGoalSync'
+import { useHabitSync } from '@/hooks/useHabitSync'
+import { useTaskSync } from '@/hooks/useTaskSync'
 
 const SAVE_DEBOUNCE_MS = 500
 
-// Wrapper component for ConnectionHandles that has access to editor context
-function ConnectionHandlesWrapper({
-  pendingConnection,
-  setPendingConnection,
-}: {
-  pendingConnection: { sourceId: TLShapeId; anchor: string } | null
-  setPendingConnection: (conn: { sourceId: TLShapeId; anchor: string } | null) => void
-}) {
-  const editor = useEditor()
+// Default prop values for shape types that have been updated since shapes were last saved.
+// This prevents tldraw validation errors when loading snapshots with missing new props.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const SHAPE_PROP_DEFAULTS: Record<string, Record<string, any>> = {
+  'daily-planner-node': { dayTasks: {} },
+}
 
-  const handleStartConnection = (sourceId: TLShapeId, anchor: string) => {
-    setPendingConnection({ sourceId, anchor })
-  }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function patchSnapshotDefaults(snapshot: any) {
+  const store = snapshot?.document?.store || snapshot?.store
+  if (!store || typeof store !== 'object') return
 
-  const handleCompleteConnection = (targetId: TLShapeId, targetAnchor: string) => {
-    if (!pendingConnection) return
+  for (const key of Object.keys(store)) {
+    if (!key.startsWith('shape:')) continue
+    const record = store[key]
+    const defaults = SHAPE_PROP_DEFAULTS[record?.typeName === 'shape' ? record.type : '']
+    if (!defaults || !record.props) continue
 
-    const sourceShape = editor.getShape(pendingConnection.sourceId)
-    const targetShape = editor.getShape(targetId)
-
-    if (!sourceShape || !targetShape) {
-      setPendingConnection(null)
-      return
+    for (const [prop, defaultValue] of Object.entries(defaults)) {
+      if (!(prop in record.props)) {
+        record.props[prop] = defaultValue
+      }
     }
-
-    // Create the connection
-    const connectionId = createShapeId()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    editor.createShape({
-      id: connectionId,
-      type: 'connection',
-      x: Math.min(sourceShape.x, targetShape.x),
-      y: Math.min(sourceShape.y, targetShape.y),
-      props: {
-        fromId: pendingConnection.sourceId,
-        toId: targetId,
-        fromAnchor: pendingConnection.anchor,
-        toAnchor: targetAnchor,
-        color: 'zinc',
-        style: 'solid',
-        label: '',
-      },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
-
-    editor.select(connectionId)
-    setPendingConnection(null)
   }
-
-  const handleCancelConnection = () => {
-    setPendingConnection(null)
-  }
-
-  return (
-    <ConnectionHandles
-      onStartConnection={handleStartConnection}
-      pendingConnection={pendingConnection}
-      onCompleteConnection={handleCompleteConnection}
-      onCancelConnection={handleCancelConnection}
-    />
-  )
 }
 
 const customShapeUtils = [
   TextNodeShapeUtil,
   GoalNodeShapeUtil,
   VideoNodeShapeUtil,
+  VideoEditorNodeShapeUtil,
   HabitNodeShapeUtil,
   TaskNodeShapeUtil,
   ConnectionShapeUtil,
@@ -116,37 +112,62 @@ const customShapeUtils = [
   ChartNodeShapeUtil,
   CalendarEventNodeShapeUtil,
   FollowerCountNodeShapeUtil,
+  PhaseNodeShapeUtil,
+  TextGroupNodeShapeUtil,
+  DailyPlannerNodeShapeUtil,
+  HabitDashboardNodeShapeUtil,
+  ContentCalendarNodeShapeUtil,
+  GoalEcosystemNodeShapeUtil,
 ]
 
 export function Canvas() {
   const [editor, setEditor] = useState<Editor | null>(null)
   const [isSaving, setIsSaving] = useState(false)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isQuickLogOpen, setIsQuickLogOpen] = useState(false)
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [storageType, setStorageType] = useState<'supabase' | 'local'>('local')
   const [isLoading, setIsLoading] = useState(true)
-  const [isConnectMode, setIsConnectMode] = useState(false)
-  const [connectionSourceId, setConnectionSourceId] = useState<TLShapeId | null>(null)
-  const [pendingConnection, setPendingConnection] = useState<{ sourceId: TLShapeId; anchor: string } | null>(null)
+  const [shapeCount, setShapeCount] = useState(0)
+  const [loadFailed, setLoadFailed] = useState(false)
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastSnapshotRef = useRef<string | null>(null)
+  const hasLoadedInitialSnapshotRef = useRef(false)
+
+  // Sync goals to Supabase
+  useGoalSync(editor)
+  // Sync habits to Supabase
+  useHabitSync(editor)
+  // Sync tasks to Supabase
+  useTaskSync(editor)
 
   // Load saved data on mount
   const handleMount = useCallback((editor: Editor) => {
     setEditor(editor)
     setStorageType(getStorageStatus())
+    hasLoadedInitialSnapshotRef.current = false
 
     // Load canvas data asynchronously
     loadCanvas()
       .then((snapshot) => {
         if (snapshot) {
+          // Patch existing shapes to include props added after initial save
+          // This prevents tldraw validation errors when new props are added to shape utils
+          patchSnapshotDefaults(snapshot)
           loadSnapshot(editor.store, snapshot)
           setLastSavedAt(new Date().toISOString())
+        }
+        if (!canvasLoadSucceeded) {
+          setLoadFailed(true)
+          console.warn('[LifeOS] Load did not succeed — auto-save is disabled')
         }
       })
       .catch((error) => {
         console.error('Failed to load canvas data:', error)
+        setLoadFailed(true)
       })
       .finally(() => {
+        hasLoadedInitialSnapshotRef.current = true
         setIsLoading(false)
       })
   }, [])
@@ -167,8 +188,13 @@ export function Canvas() {
     lastSnapshotRef.current = snapshotString
 
     try {
-      await saveCanvas(snapshot)
-      setLastSavedAt(new Date().toISOString())
+      const saved = await saveCanvas(snapshot)
+      if (saved) {
+        setLastSavedAt(new Date().toISOString())
+        // Count shapes for status display
+        const store = snapshot?.document?.store || snapshot?.store || {}
+        setShapeCount(Object.keys(store).filter((k: string) => k.startsWith('shape:')).length)
+      }
     } catch (error) {
       console.error('Failed to save canvas data:', error)
     } finally {
@@ -181,6 +207,11 @@ export function Canvas() {
     if (!editor) return
 
     const schedulesSave = () => {
+      // Prevent saving an empty/default snapshot before we've attempted to load persisted data.
+      if (!hasLoadedInitialSnapshotRef.current) return
+      // If load failed, block all saves to prevent data loss.
+      if (!canvasLoadSucceeded) return
+
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current)
       }
@@ -200,15 +231,49 @@ export function Canvas() {
     }
   }, [editor, debouncedSave])
 
+  // Keyboard shortcuts
+  useEffect(() => {
+    if (!editor) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore when typing in inputs or when tldraw is in editing mode
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return
+      if (editor.getEditingShapeId()) return
+
+      if (e.key === 'q' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        const center = editor.getViewportScreenCenter()
+        const point = editor.screenToPage(center)
+        const id = createShapeId()
+        editor.createShape({
+          id,
+          type: 'task-node' as 'geo',
+          x: point.x - 80,
+          y: point.y - 40,
+          props: { w: 160, h: 80, title: 'New Task', description: '', completed: false, dueDate: '', priority: 'medium', color: 'blue' },
+        })
+        editor.select(id)
+        editor.setEditingShape(id)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [editor])
+
   return (
     <TooltipProvider delayDuration={0}>
       <div className="relative h-full w-full">
         <style jsx global>{`
           .tl-background {
             background-color: #0a0a0a !important;
+            background-image: radial-gradient(circle, rgba(255, 255, 255, 0.07) var(--dot-size, 1px), transparent var(--dot-size, 1px)) !important;
+            background-size: var(--dot-spacing, 24px) var(--dot-spacing, 24px) !important;
+            background-position: var(--dot-offset-x, 0px) var(--dot-offset-y, 0px) !important;
           }
           .tl-canvas {
-            background-color: #0a0a0a !important;
+            background-color: transparent !important;
           }
           /* Hide default tldraw UI */
           .tlui-layout__top,
@@ -217,7 +282,7 @@ export function Canvas() {
           }
           /* Grid styling */
           .tl-grid {
-            opacity: 0.3 !important;
+            opacity: 0 !important;
           }
         `}</style>
 
@@ -236,32 +301,27 @@ export function Canvas() {
           hideUi
           inferDarkMode
         >
-          <Toolbar
-            onConnectMode={() => setIsConnectMode(!isConnectMode)}
-            isConnectMode={isConnectMode}
-          />
-          <PropertiesPanel />
-          <GoalPropertiesPanel />
-          <VideoPropertiesPanel />
-          <HabitPropertiesPanel />
-          <TaskPropertiesPanel />
-          <ConnectionPropertiesPanel />
-          <ConnectionMode
-            isActive={isConnectMode}
-            onClose={() => setIsConnectMode(false)}
-            sourceId={connectionSourceId}
-            setSourceId={setConnectionSourceId}
-          />
-          <ConnectionHandlesWrapper
-            pendingConnection={pendingConnection}
-            setPendingConnection={setPendingConnection}
-          />
-          <SearchPanel />
-          <Minimap />
-          <StatusBar
+          <DotGridBackground />
+          <TopLeftToolbar />
+          <TopRightSection onSearchClick={() => setIsSearchOpen(true)} />
+          <BottomLeftSection
             isSaving={isSaving}
             lastSavedAt={lastSavedAt}
             storageType={storageType}
+            shapeCount={shapeCount}
+            loadFailed={loadFailed}
+          />
+          <NodeInfoDrawer />
+          <VideoEditorPropertiesPanel />
+          <ConnectionHandles />
+          <SearchPanel isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+          <Minimap />
+          <SelectionMenu />
+          <PomodoroTimer />
+          <QuickLogPanel
+            isOpen={isQuickLogOpen}
+            onOpen={() => setIsQuickLogOpen(true)}
+            onClose={() => setIsQuickLogOpen(false)}
           />
         </Tldraw>
       </div>

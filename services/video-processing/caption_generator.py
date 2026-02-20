@@ -1,5 +1,5 @@
 """
-Caption Generator using OpenAI Whisper API
+Caption Generator using faster-whisper (Local)
 Generates subtitles/captions in Mongolian and English
 """
 
@@ -10,8 +10,6 @@ from pathlib import Path
 from typing import Optional
 import json
 
-from openai import OpenAI
-
 
 def extract_audio(input_path: str, output_path: str) -> bool:
     """Extract audio from video file."""
@@ -20,7 +18,7 @@ def extract_audio(input_path: str, output_path: str) -> bool:
         "-y",
         "-i", input_path,
         "-vn",
-        "-acodec", "mp3",
+        "-acodec", "pcm_s16le",
         "-ar", "16000",
         "-ac", "1",
         output_path
@@ -74,66 +72,66 @@ def generate_captions(
     model_size: str = "base"
 ) -> dict:
     """
-    Generate captions for a video file using OpenAI Whisper API.
+    Generate captions for a video file using faster-whisper.
 
     Args:
         input_path: Path to input video file
         output_dir: Directory to save caption files
         language: Language code (e.g., 'mn' for Mongolian, 'en' for English)
                   If None, Whisper will auto-detect
-        model_size: Ignored (API uses whisper-1 model)
+        model_size: Whisper model size ('tiny', 'base', 'small', 'medium', 'large-v3')
 
     Returns:
         Dictionary with paths to generated caption files
     """
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError:
         return {
             "success": False,
-            "error": "OPENAI_API_KEY environment variable not set"
+            "error": "faster-whisper not installed. Run: pip install faster-whisper"
         }
 
-    client = OpenAI(api_key=api_key)
     os.makedirs(output_dir, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        # Extract audio as mp3 (smaller file size for API)
-        audio_path = os.path.join(temp_dir, "audio.mp3")
+        # Extract audio
+        audio_path = os.path.join(temp_dir, "audio.wav")
         if not extract_audio(input_path, audio_path):
             return {
                 "success": False,
                 "error": "Failed to extract audio from video"
             }
 
-        # Check file size (OpenAI limit is 25MB)
-        file_size = os.path.getsize(audio_path)
-        if file_size > 25 * 1024 * 1024:
-            return {
-                "success": False,
-                "error": f"Audio file too large ({file_size / 1024 / 1024:.1f}MB). Max is 25MB."
-            }
+        # Load Whisper model
+        print(f"Loading Whisper model: {model_size}")
+        model = WhisperModel(model_size, device="cpu", compute_type="int8")
 
-        print("Transcribing audio with OpenAI Whisper API...")
+        # Transcribe
+        print("Transcribing audio...")
+        transcribe_options = {
+            "beam_size": 5,
+            "word_timestamps": True,
+        }
 
-        # Transcribe using OpenAI API
-        with open(audio_path, "rb") as audio_file:
-            transcribe_options = {
-                "model": "whisper-1",
-                "file": audio_file,
-                "response_format": "verbose_json",
-                "timestamp_granularities": ["segment"]
-            }
+        if language:
+            transcribe_options["language"] = language
 
-            if language:
-                transcribe_options["language"] = language
+        segments_generator, info = model.transcribe(audio_path, **transcribe_options)
 
-            result = client.audio.transcriptions.create(**transcribe_options)
+        # Convert generator to list and extract segment data
+        segments = []
+        full_text_parts = []
+        for segment in segments_generator:
+            segments.append({
+                "start": segment.start,
+                "end": segment.end,
+                "text": segment.text
+            })
+            full_text_parts.append(segment.text)
 
-        # Convert response to dict
-        result_dict = result.model_dump()
-        detected_language = result_dict.get("language", "unknown")
-        segments = result_dict.get("segments", [])
-        full_text = result_dict.get("text", "")
+        detected_language = info.language
+        full_text = " ".join(full_text_parts)
 
         # Generate caption files
         base_name = Path(input_path).stem
@@ -183,16 +181,17 @@ def generate_bilingual_captions(
     Args:
         input_path: Path to input video file
         output_dir: Directory to save caption files
-        model_size: Ignored (API uses whisper-1)
+        model_size: Whisper model size
 
     Returns:
         Dictionary with paths to generated caption files
     """
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError:
         return {
             "success": False,
-            "error": "OPENAI_API_KEY environment variable not set"
+            "error": "faster-whisper not installed. Run: pip install faster-whisper"
         }
 
     results = {}
@@ -215,23 +214,28 @@ def generate_bilingual_captions(
     if detected_language == "mn" or detected_language == "mongolian":
         print("Generating English translation...")
 
-        client = OpenAI(api_key=api_key)
-
         with tempfile.TemporaryDirectory() as temp_dir:
-            audio_path = os.path.join(temp_dir, "audio.mp3")
+            audio_path = os.path.join(temp_dir, "audio.wav")
             extract_audio(input_path, audio_path)
 
-            # Use translation endpoint for English translation
-            with open(audio_path, "rb") as audio_file:
-                result = client.audio.translations.create(
-                    model="whisper-1",
-                    file=audio_file,
-                    response_format="verbose_json",
-                    timestamp_granularities=["segment"]
-                )
+            model = WhisperModel(model_size, device="cpu", compute_type="int8")
 
-            result_dict = result.model_dump()
-            segments = result_dict.get("segments", [])
+            # Use task="translate" for translation to English
+            segments_generator, info = model.transcribe(
+                audio_path,
+                task="translate",
+                beam_size=5
+            )
+
+            segments = []
+            full_text_parts = []
+            for segment in segments_generator:
+                segments.append({
+                    "start": segment.start,
+                    "end": segment.end,
+                    "text": segment.text
+                })
+                full_text_parts.append(segment.text)
 
             base_name = Path(input_path).stem
             srt_path = os.path.join(output_dir, f"{base_name}_en_translated.srt")
@@ -244,7 +248,7 @@ def generate_bilingual_captions(
                 "success": True,
                 "srt_path": srt_path,
                 "vtt_path": vtt_path,
-                "full_text": result_dict.get("text", ""),
+                "full_text": " ".join(full_text_parts),
                 "segment_count": len(segments)
             }
 

@@ -9,12 +9,69 @@ import {
   Rectangle2d,
   resizeBox,
 } from 'tldraw'
+import React from 'react'
+
+/** Render a simple markdown string into React elements (supports **bold** and - lists) */
+function renderSimpleMarkdown(text: string): React.ReactNode[] {
+  const lines = text.split('\n')
+  const elements: React.ReactNode[] = []
+  let listItems: React.ReactNode[] = []
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      elements.push(
+        <ul key={`ul-${elements.length}`} className="list-disc pl-3.5 space-y-0.5">
+          {listItems}
+        </ul>
+      )
+      listItems = []
+    }
+  }
+
+  const renderInline = (str: string): React.ReactNode[] => {
+    const parts: React.ReactNode[] = []
+    const regex = /\*\*(.+?)\*\*/g
+    let lastIndex = 0
+    let match: RegExpExecArray | null
+
+    while ((match = regex.exec(str)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(str.slice(lastIndex, match.index))
+      }
+      parts.push(<strong key={`b-${match.index}`}>{match[1]}</strong>)
+      lastIndex = regex.lastIndex
+    }
+    if (lastIndex < str.length) {
+      parts.push(str.slice(lastIndex))
+    }
+    return parts.length > 0 ? parts : [str]
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    const listMatch = line.match(/^\s*- (.*)/)
+    if (listMatch) {
+      listItems.push(<li key={`li-${i}`}>{renderInline(listMatch[1])}</li>)
+    } else {
+      flushList()
+      if (line.trim() === '') {
+        elements.push(<br key={`br-${i}`} />)
+      } else {
+        elements.push(<span key={`p-${i}`} className="block">{renderInline(line)}</span>)
+      }
+    }
+  }
+  flushList()
+
+  return elements
+}
 
 // Define the shape properties schema
 const textNodeShapeProps = {
   w: T.number,
   h: T.number,
   text: T.string,
+  description: T.string,
   color: T.string,
 }
 
@@ -32,6 +89,7 @@ export class TextNodeShapeUtil extends ShapeUtil<any> {
       w: 200,
       h: 100,
       text: '',
+      description: '',
       color: 'white',
     }
   }
@@ -45,7 +103,7 @@ export class TextNodeShapeUtil extends ShapeUtil<any> {
   }
 
   component(shape: TextNodeShape) {
-    const { text, color } = shape.props
+    const { text, description, color } = shape.props
     const isSelected = this.editor.getSelectedShapeIds().includes(shape.id)
     const isEditing = this.editor.getEditingShapeId() === shape.id
 
@@ -73,23 +131,24 @@ export class TextNodeShapeUtil extends ShapeUtil<any> {
         style={{
           width: shape.props.w,
           height: shape.props.h,
+          overflow: 'hidden',
         }}
       >
         <div
-          className={`flex h-full w-full flex-col rounded-lg border bg-zinc-900/90 p-3 backdrop-blur-sm transition-all ${
+          className={`ios-scale-in flex h-full w-full flex-col overflow-hidden rounded-lg border bg-zinc-900/90 p-3 backdrop-blur-sm transition-all ${
             isSelected ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-zinc-700'
           }`}
           style={{
             color: textColor,
-            pointerEvents: isEditing ? 'all' : 'none',
+            pointerEvents: 'all',
           }}
         >
           {isEditing ? (
-            <textarea
-              className="h-full w-full resize-none bg-transparent text-sm outline-none placeholder:text-zinc-500"
+            <input
+              className="w-full bg-transparent text-sm font-semibold outline-none placeholder:text-zinc-500"
               style={{ color: textColor }}
               value={text}
-              placeholder="Type your note..."
+              placeholder="Click to add title..."
               autoFocus
               onChange={(e) => {
                 this.editor.updateShape({
@@ -101,17 +160,29 @@ export class TextNodeShapeUtil extends ShapeUtil<any> {
               }}
               onPointerDown={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
-                if (e.key === 'Escape') {
+                if (e.key === 'Escape' || e.key === 'Enter') {
                   this.editor.setEditingShape(null)
                 }
                 e.stopPropagation()
               }}
             />
           ) : (
-            <div className="h-full w-full overflow-auto text-sm whitespace-pre-wrap">
+            <div
+              className="text-sm font-semibold cursor-text"
+              onClick={(e) => {
+                e.stopPropagation()
+                this.editor.setEditingShape(shape.id)
+              }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
               {text || (
-                <span className="text-zinc-500">Double-click to edit...</span>
+                <span className="text-zinc-500">Click to add title...</span>
               )}
+            </div>
+          )}
+          {description && (
+            <div className="mt-1 flex-1 overflow-hidden text-xs leading-relaxed opacity-60" style={{ color: textColor }}>
+              {renderSimpleMarkdown(description)}
             </div>
           )}
         </div>

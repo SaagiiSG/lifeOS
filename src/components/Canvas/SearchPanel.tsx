@@ -4,6 +4,8 @@ import { useState, useMemo, useCallback } from 'react'
 import { useEditor, useValue } from 'tldraw'
 import { Search, X, Type, Target, Flame, CheckSquare, Video, DollarSign, BookOpen, Lightbulb, BarChart3, Calendar, Users } from 'lucide-react'
 import { Input } from '@/components/ui/input'
+import { useAnimatedUnmount } from '@/hooks/useAnimatedUnmount'
+import { cn } from '@/lib/utils'
 
 const nodeTypeIcons: Record<string, React.ReactNode> = {
   'text-node': <Type className="h-3 w-3" />,
@@ -56,11 +58,16 @@ interface SearchResult {
   y: number
 }
 
-export function SearchPanel() {
+interface SearchPanelProps {
+  isOpen: boolean
+  onClose: () => void
+}
+
+export function SearchPanel({ isOpen, onClose }: SearchPanelProps) {
   const editor = useEditor()
-  const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
+  const { shouldRender, animationState } = useAnimatedUnmount(isOpen)
 
   const shapes = useValue(
     'all shapes',
@@ -151,25 +158,21 @@ export function SearchPanel() {
     (result: SearchResult) => {
       editor.select(result.id as any)
       editor.centerOnPoint({ x: result.x, y: result.y }, { animation: { duration: 300 } })
-      setIsOpen(false)
+      onClose()
       setQuery('')
     },
-    [editor]
+    [editor, onClose]
   )
 
-  if (!isOpen) {
-    return (
-      <button
-        onClick={() => setIsOpen(true)}
-        className="absolute right-4 top-4 z-40 flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900/90 text-zinc-400 backdrop-blur-sm transition-colors hover:text-white"
-      >
-        <Search className="h-4 w-4" />
-      </button>
-    )
-  }
+  if (!shouldRender) return null
+
+  const isEntering = animationState === 'entering' || animationState === 'entered'
 
   return (
-    <div className="absolute right-4 top-4 z-50 w-80 rounded-lg border border-zinc-700 bg-zinc-900/95 backdrop-blur-sm">
+    <div className={cn(
+      "absolute right-4 top-4 z-50 w-80 rounded-lg glass-panel",
+      isEntering ? 'ios-animate-in' : 'ios-animate-out'
+    )}>
       {/* Search Input */}
       <div className="flex items-center gap-2 border-b border-zinc-700 p-2">
         <Search className="h-4 w-4 text-zinc-500" />
@@ -182,7 +185,7 @@ export function SearchPanel() {
         />
         <button
           onClick={() => {
-            setIsOpen(false)
+            onClose()
             setQuery('')
             setTypeFilter(null)
           }}
@@ -196,11 +199,10 @@ export function SearchPanel() {
       <div className="flex gap-1 border-b border-zinc-700 p-2">
         <button
           onClick={() => setTypeFilter(null)}
-          className={`rounded px-2 py-1 text-xs transition-colors ${
-            typeFilter === null
-              ? 'bg-zinc-700 text-white'
-              : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
-          }`}
+          className={`rounded px-2 py-1 text-xs transition-colors ${typeFilter === null
+            ? 'bg-zinc-700 text-white'
+            : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+            }`}
         >
           All
         </button>
@@ -208,11 +210,10 @@ export function SearchPanel() {
           <button
             key={type}
             onClick={() => setTypeFilter(typeFilter === type ? null : type)}
-            className={`flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors ${
-              typeFilter === type
-                ? 'bg-zinc-700 text-white'
-                : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
-            }`}
+            className={`flex items-center gap-1 rounded px-2 py-1 text-xs transition-colors ${typeFilter === type
+              ? 'bg-zinc-700 text-white'
+              : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+              }`}
           >
             {nodeTypeIcons[type]}
             {label}
@@ -227,7 +228,7 @@ export function SearchPanel() {
             {query ? 'No results found' : 'Start typing to search'}
           </div>
         ) : (
-          <div className="divide-y divide-zinc-800">
+          <div className="divide-y divide-zinc-800 stagger-children">
             {searchResults.map((result) => (
               <button
                 key={result.id}

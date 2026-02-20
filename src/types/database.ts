@@ -174,6 +174,41 @@ export interface Database {
           updated_at?: string
         }
       }
+      broll_clips: {
+        Row: {
+          id: string
+          user_id: string | null
+          file_path: string
+          category: 'timelapse' | 'medium' | 'wide-shot' | 'close-up' | 'random' | 'walking-selfie'
+          duration: number | null
+          thumbnail_url: string | null
+          keywords: string[] | null
+          filename: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          file_path: string
+          category?: 'timelapse' | 'medium' | 'wide-shot' | 'close-up' | 'random' | 'walking-selfie'
+          duration?: number | null
+          thumbnail_url?: string | null
+          keywords?: string[] | null
+          filename?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          file_path?: string
+          category?: 'timelapse' | 'medium' | 'wide-shot' | 'close-up' | 'random' | 'walking-selfie'
+          duration?: number | null
+          thumbnail_url?: string | null
+          keywords?: string[] | null
+          filename?: string | null
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
