@@ -25,6 +25,7 @@ export function useAutoSave({ interval = 500, onSave }: UseAutoSaveOptions = {})
           await onSave()
         }
         setLastSaved(new Date().toISOString())
+        setSaving(false)
       } catch (error) {
         console.error('Auto-save failed:', error)
         setSaving(false)
