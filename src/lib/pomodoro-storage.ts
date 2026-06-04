@@ -27,7 +27,7 @@ export function savePomodoroSession(session: Omit<PomodoroSession, 'id'>): Pomod
   const sessions = getSessions()
   const newSession: PomodoroSession = {
     ...session,
-    id: `pom-${Date.now()}`,
+    id: `pom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
   }
   sessions.push(newSession)
   setSessions(sessions)
